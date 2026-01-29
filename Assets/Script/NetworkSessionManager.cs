@@ -6,21 +6,32 @@ using System;
 using UnityEngine.SceneManagement;
 using TMPro;
 
-public class NetworkManager : MonoBehaviour, INetworkRunnerCallbacks
+public class NetworkSessionManager : MonoBehaviour, INetworkRunnerCallbacks
 {
     #region Public Variables
     [SerializeField] private NetworkPrefabRef playerPrefab;
     [SerializeField] private TMP_InputField nameInputField;
     [SerializeField] private TMP_Dropdown colorDropdown;
+    public static NetworkSessionManager Instance { get; private set; }
     
     public string playerName;
     public Color playerColor;
     #endregion
     #region Private Variables
-    private Dictionary<PlayerRef, NetworkObject> _spawnedCharacters = new Dictionary<PlayerRef, NetworkObject>();
+    private Dictionary<PlayerRef, NetworkObject> _spawnedCharacters = null;
     private NetworkRunner _networkRunner;
+    private List<PlayerRef> _joinedPlayers => new();
+    public IReadOnlyList<PlayerRef> JoinedPlayers => _joinedPlayers;
+
+    public event Action<PlayerRef> OnPlayerJoinedEvent;
+    public event Action<PlayerRef> OnPlayerLeftEvent;
+
     private bool hasName;
     private bool hasColor;
+
+   
+
+
     #endregion
 
     public async void StartGame(GameMode gameMode)
@@ -51,6 +62,18 @@ public class NetworkManager : MonoBehaviour, INetworkRunnerCallbacks
     }
 
     #region Unity Callbacks
+
+    private void Awake()
+    {
+        if(Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
     private void Start()
     {
 
@@ -113,21 +136,14 @@ public class NetworkManager : MonoBehaviour, INetworkRunnerCallbacks
 
     public void OnPlayerJoined(NetworkRunner runner, PlayerRef player)
     {
-        if (runner.IsServer)
-        {
-            var pos = new Vector3(0, 1f ,0);
-            var networkObj = runner.Spawn(playerPrefab, pos, Quaternion.identity, player);
-
-            _spawnedCharacters.Add(player, networkObj);
-        }
+        _joinedPlayers.Add(player);
+        OnPlayerJoinedEvent?.Invoke(player);
     }
 
     public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
     {
-        if(!_spawnedCharacters.TryGetValue(player, out var playerObject)) return;
-
-        runner.Despawn(playerObject);
-        _spawnedCharacters.Remove(player);
+        _joinedPlayers.Remove(player);
+        OnPlayerLeftEvent?.Invoke(player);
     }
     #endregion
 
